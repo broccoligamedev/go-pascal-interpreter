@@ -31,12 +31,12 @@ func (t *Token) String() string {
 	return strconv.Itoa(t.value)
 }
 
-func getNextToken() (*Token, error) {
+func getNextToken() *Token {
 	if pos > len(text)-1 {
 		return &Token{
 			tokenType: EOF,
 			value:     0,
-		}, nil
+		}
 	}
 	currentChar := rune(text[pos])
 	fmt.Println("current character", string(currentChar))
@@ -47,25 +47,21 @@ func getNextToken() (*Token, error) {
 		return &Token{
 			tokenType: INTEGER,
 			value:     value,
-		}, nil
+		}
 	}
 	if currentChar == '+' {
 		pos++
 		return &Token{
 			tokenType: PLUS,
-		}, nil
+		}
 	}
-	return nil, errors.New("invalid token")
+	panic(errors.New("invalid token"))
 }
 
 func eat(tokenType TokenType) {
 	fmt.Println("eating " + strconv.Itoa(int(tokenType)))
-	var err error
 	if currentToken.tokenType == tokenType {
-		currentToken, err = getNextToken()
-		if err != nil {
-			panic(err)
-		}
+		currentToken = getNextToken()
 	} else {
 		fmt.Println(
 			"expected " +
@@ -77,11 +73,7 @@ func eat(tokenType TokenType) {
 }
 
 func expr() int {
-	var err error
-	currentToken, err = getNextToken()
-	if err != nil {
-		panic(err)
-	}
+	currentToken = getNextToken()
 	left := currentToken
 	eat(INTEGER)
 	eat(PLUS)
