@@ -39,6 +39,7 @@ func getNextToken() (*Token, error) {
 		}, nil
 	}
 	currentChar := rune(text[pos])
+	fmt.Println("current character", string(currentChar))
 	// todo(ryan): is this the best way to do this?
 	if unicode.IsDigit(rune(currentChar)) {
 		pos++
@@ -98,6 +99,7 @@ func main() {
 		fmt.Print("> ")
 		text, err = reader.ReadString('\n')
 		text = strings.TrimSpace(text)
+		pos = 0
 		if err != nil {
 			panic(err)
 		}
