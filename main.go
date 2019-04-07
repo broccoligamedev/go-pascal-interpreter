@@ -41,7 +41,7 @@ func getNextToken() (*Token, error) {
 	currentChar := rune(text[pos])
 	fmt.Println("current character", string(currentChar))
 	// todo(ryan): is this the best way to do this?
-	if unicode.IsDigit(rune(currentChar)) {
+	if unicode.IsDigit(currentChar) {
 		pos++
 		value := int(currentChar - '0')
 		return &Token{
@@ -92,7 +92,6 @@ func expr() int {
 }
 
 func main() {
-	// todo(ryan): fix position bug
 	var err error
 	reader := bufio.NewReader(os.Stdin)
 	for {
