@@ -16,6 +16,7 @@ const (
 	INTEGER TokenType = iota
 	PLUS
 	EOF
+	MINUS
 )
 
 type Token struct {
@@ -39,11 +40,36 @@ func getNextToken() *Token {
 		}
 	}
 	currentChar := rune(text[pos])
-	fmt.Println("current character", string(currentChar))
+	for unicode.IsSpace(currentChar) {
+		pos++
+		if pos > len(text)-1 {
+			return &Token{
+				tokenType: EOF,
+				value:     0,
+			}
+		}
+		currentChar = rune(text[pos])
+	}
+	//fmt.Println("current character", string(currentChar))
 	// todo(ryan): is this the best way to do this?
 	if unicode.IsDigit(currentChar) {
-		pos++
-		value := int(currentChar - '0')
+		// note(ryan): token is an integer so we need to collect all the digits
+		digits := []rune{}
+		for {
+			digits = append(digits, currentChar)
+			pos++
+			if pos > len(text)-1 {
+				break
+			}
+			currentChar = rune(text[pos])
+			if !unicode.IsDigit(currentChar) {
+				break
+			}
+		}
+		value, err := strconv.Atoi(string(digits))
+		if err != nil {
+			panic(err)
+		}
 		return &Token{
 			tokenType: INTEGER,
 			value:     value,
@@ -53,6 +79,12 @@ func getNextToken() *Token {
 		pos++
 		return &Token{
 			tokenType: PLUS,
+		}
+	}
+	if currentChar == '-' {
+		pos++
+		return &Token{
+			tokenType: MINUS,
 		}
 	}
 	panic(errors.New("invalid token"))
