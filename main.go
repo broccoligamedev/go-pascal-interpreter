@@ -15,8 +15,8 @@ type TokenType int
 const (
 	INTEGER TokenType = iota
 	PLUS
-	EOF
 	MINUS
+	EOF
 )
 
 type Token struct {
@@ -27,71 +27,74 @@ type Token struct {
 var text string
 var pos int
 var currentToken *Token
+var currentCharacter rune
+var eof = false
 
 func (t *Token) String() string {
 	return strconv.Itoa(t.value)
 }
 
-func getNextToken() *Token {
+func advance() {
+	pos++
 	if pos > len(text)-1 {
-		return &Token{
-			tokenType: EOF,
-			value:     0,
-		}
+		eof = true
+	} else {
+		currentCharacter = rune(text[pos])
 	}
-	currentChar := rune(text[pos])
-	for unicode.IsSpace(currentChar) {
-		pos++
-		if pos > len(text)-1 {
+}
+
+func skipWhitespace() {
+	for !eof && unicode.IsSpace(currentCharacter) {
+		advance()
+	}
+}
+
+func integer() int {
+	digits := []rune{}
+	for !eof && unicode.IsDigit(currentCharacter) {
+		digits = append(digits, currentCharacter)
+		advance()
+	}
+	value, err := strconv.Atoi(string(digits))
+	if err != nil {
+		panic(err)
+	}
+	return value
+}
+
+func getNextToken() *Token {
+	for !eof {
+		if unicode.IsSpace(currentCharacter) {
+			skipWhitespace()
+			continue
+		}
+		if unicode.IsDigit(currentCharacter) {
 			return &Token{
-				tokenType: EOF,
-				value:     0,
+				tokenType: INTEGER,
+				value:     integer(),
 			}
 		}
-		currentChar = rune(text[pos])
-	}
-	//fmt.Println("current character", string(currentChar))
-	// todo(ryan): is this the best way to do this?
-	if unicode.IsDigit(currentChar) {
-		// note(ryan): token is an integer so we need to collect all the digits
-		digits := []rune{}
-		for {
-			digits = append(digits, currentChar)
-			pos++
-			if pos > len(text)-1 {
-				break
-			}
-			currentChar = rune(text[pos])
-			if !unicode.IsDigit(currentChar) {
-				break
+		if currentCharacter == '+' {
+			advance()
+			return &Token{
+				tokenType: PLUS,
 			}
 		}
-		value, err := strconv.Atoi(string(digits))
-		if err != nil {
-			panic(err)
+		if currentCharacter == '-' {
+			advance()
+			return &Token{
+				tokenType: MINUS,
+			}
 		}
-		return &Token{
-			tokenType: INTEGER,
-			value:     value,
-		}
+		panic(errors.New("invalid token: " + string(currentCharacter)))
 	}
-	if currentChar == '+' {
-		pos++
-		return &Token{
-			tokenType: PLUS,
-		}
+	return &Token{
+		tokenType: EOF,
 	}
-	if currentChar == '-' {
-		pos++
-		return &Token{
-			tokenType: MINUS,
-		}
-	}
-	panic(errors.New("invalid token"))
 }
 
 func eat(tokenType TokenType) {
-	fmt.Println("eating " + strconv.Itoa(int(tokenType)))
+	//fmt.Println("eating " + strconv.Itoa(int(tokenType)))
 	if currentToken.tokenType == tokenType {
 		currentToken = getNextToken()
 	} else {
@@ -100,6 +103,8 @@ func eat(tokenType TokenType) {
 				strconv.Itoa(int(tokenType)) +
 				" but got " +
 				strconv.Itoa(int(currentToken.tokenType)))
+		fmt.Println("pos", pos)
+		fmt.Println("char", string(currentCharacter))
 		panic(errors.New("wrong token type"))
 	}
 }
@@ -108,10 +113,20 @@ func expr() int {
 	currentToken = getNextToken()
 	left := currentToken
 	eat(INTEGER)
-	eat(PLUS)
+	op := currentToken.tokenType
+	if op == PLUS {
+		eat(PLUS)
+	} else if op == MINUS {
+		eat(MINUS)
+	}
 	right := currentToken
 	eat(INTEGER)
-	result := left.value + right.value
+	result := 0
+	if op == PLUS {
+		result = left.value + right.value
+	} else if op == MINUS {
+		result = left.value - right.value
+	}
 	return result
 }
 
@@ -122,7 +137,9 @@ func main() {
 		fmt.Print("> ")
 		text, err = reader.ReadString('\n')
 		text = strings.TrimSpace(text)
+		eof = false
 		pos = 0
+		currentCharacter = rune(text[0])
 		if err != nil {
 			panic(err)
 		}
