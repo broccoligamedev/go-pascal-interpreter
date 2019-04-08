@@ -16,6 +16,8 @@ const (
 	INTEGER TokenType = iota
 	PLUS
 	MINUS
+	MULTIPLY
+	DIVIDE
 	EOF
 )
 
@@ -74,16 +76,26 @@ func getNextToken() *Token {
 				value:     integer(),
 			}
 		}
-		if currentCharacter == '+' {
+		switch currentCharacter {
+		case '+':
 			advance()
 			return &Token{
 				tokenType: PLUS,
 			}
-		}
-		if currentCharacter == '-' {
+		case '-':
 			advance()
 			return &Token{
 				tokenType: MINUS,
+			}
+		case '*':
+			advance()
+			return &Token{
+				tokenType: MULTIPLY,
+			}
+		case '/':
+			advance()
+			return &Token{
+				tokenType: DIVIDE,
 			}
 		}
 		panic(errors.New("invalid token: " + string(currentCharacter)))
@@ -112,20 +124,34 @@ func eat(tokenType TokenType) {
 func expr() int {
 	currentToken = getNextToken()
 	left := currentToken
+	result := left.value
 	eat(INTEGER)
-	op := currentToken.tokenType
-	if op == PLUS {
-		eat(PLUS)
-	} else if op == MINUS {
-		eat(MINUS)
-	}
-	right := currentToken
-	eat(INTEGER)
-	result := 0
-	if op == PLUS {
-		result = left.value + right.value
-	} else if op == MINUS {
-		result = left.value - right.value
+	for !eof {
+		op := currentToken.tokenType
+		switch op {
+		case PLUS:
+			eat(PLUS)
+		case MINUS:
+			eat(MINUS)
+		case MULTIPLY:
+			eat(MULTIPLY)
+		case DIVIDE:
+			eat(DIVIDE)
+		default:
+			panic("bad operator")
+		}
+		right := currentToken
+		eat(INTEGER)
+		switch op {
+		case PLUS:
+			result += right.value
+		case MINUS:
+			result -= right.value
+		case MULTIPLY:
+			result *= right.value
+		case DIVIDE:
+			result /= right.value
+		}
 	}
 	return result
 }
