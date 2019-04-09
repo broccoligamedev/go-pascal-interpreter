@@ -51,6 +51,12 @@ func skipWhitespace() {
 	}
 }
 
+func term() int {
+	token := currentToken
+	eat(INTEGER)
+	return token.value
+}
+
 func integer() int {
 	digits := []rune{}
 	for !eof && unicode.IsDigit(currentCharacter) {
@@ -121,46 +127,43 @@ func eat(tokenType TokenType) {
 	}
 }
 
-func expr() int {
+func expr() (int, error) {
+	// todo(ryan): proper error handling
 	currentToken = getNextToken()
-	left := currentToken
-	result := left.value
-	eat(INTEGER)
-	for !eof {
-		op := currentToken.tokenType
-		switch op {
+	//fmt.Println("current token", currentToken.tokenType)
+	result := term()
+	//fmt.Println("current token", currentToken.tokenType)
+	for currentToken.tokenType == PLUS ||
+		currentToken.tokenType == MINUS ||
+		currentToken.tokenType == MULTIPLY ||
+		currentToken.tokenType == DIVIDE {
+		token := currentToken
+		switch token.tokenType {
 		case PLUS:
 			eat(PLUS)
+			result += term()
 		case MINUS:
 			eat(MINUS)
+			result -= term()
 		case MULTIPLY:
 			eat(MULTIPLY)
+			result *= term()
 		case DIVIDE:
 			eat(DIVIDE)
+			result /= term()
 		default:
 			panic("bad operator")
 		}
-		right := currentToken
-		eat(INTEGER)
-		switch op {
-		case PLUS:
-			result += right.value
-		case MINUS:
-			result -= right.value
-		case MULTIPLY:
-			result *= right.value
-		case DIVIDE:
-			result /= right.value
-		}
+		//fmt.Println("token :", currentToken.tokenType)
 	}
-	return result
+	return result, nil
 }
 
 func main() {
 	var err error
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		fmt.Print("> ")
+		fmt.Print("calc> ")
 		text, err = reader.ReadString('\n')
 		text = strings.TrimSpace(text)
 		eof = false
@@ -172,6 +175,11 @@ func main() {
 		if len(text) == 0 {
 			continue
 		}
-		fmt.Println(expr())
+		result, err := expr()
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		fmt.Println(result)
 	}
 }
