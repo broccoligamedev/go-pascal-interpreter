@@ -51,7 +51,7 @@ func skipWhitespace() {
 	}
 }
 
-func term() int {
+func factor() int {
 	token := currentToken
 	eat(INTEGER)
 	return token.value
@@ -68,6 +68,48 @@ func integer() int {
 		panic(err)
 	}
 	return value
+}
+
+func expr() (int, error) {
+	// todo(ryan): proper error handling
+	result := factor()
+	for currentToken.tokenType == PLUS ||
+		currentToken.tokenType == MINUS ||
+		currentToken.tokenType == MULTIPLY ||
+		currentToken.tokenType == DIVIDE {
+		token := currentToken
+		switch token.tokenType {
+		case PLUS:
+			eat(PLUS)
+			result += factor()
+		case MINUS:
+			eat(MINUS)
+			result -= factor()
+		case MULTIPLY:
+			eat(MULTIPLY)
+			result *= factor()
+		case DIVIDE:
+			eat(DIVIDE)
+			result /= factor()
+		}
+	}
+	return result, nil
+}
+
+func eat(tokenType TokenType) {
+	//fmt.Println("eating " + strconv.Itoa(int(tokenType)))
+	if currentToken.tokenType == tokenType {
+		currentToken = getNextToken()
+	} else {
+		fmt.Println(
+			"expected " +
+				strconv.Itoa(int(tokenType)) +
+				" but got " +
+				strconv.Itoa(int(currentToken.tokenType)))
+		fmt.Println("pos", pos)
+		fmt.Println("char", string(currentCharacter))
+		panic(errors.New("wrong token type"))
+	}
 }
 
 func getNextToken() *Token {
@@ -111,54 +153,6 @@ func getNextToken() *Token {
 	}
 }
 
-func eat(tokenType TokenType) {
-	//fmt.Println("eating " + strconv.Itoa(int(tokenType)))
-	if currentToken.tokenType == tokenType {
-		currentToken = getNextToken()
-	} else {
-		fmt.Println(
-			"expected " +
-				strconv.Itoa(int(tokenType)) +
-				" but got " +
-				strconv.Itoa(int(currentToken.tokenType)))
-		fmt.Println("pos", pos)
-		fmt.Println("char", string(currentCharacter))
-		panic(errors.New("wrong token type"))
-	}
-}
-
-func expr() (int, error) {
-	// todo(ryan): proper error handling
-	currentToken = getNextToken()
-	//fmt.Println("current token", currentToken.tokenType)
-	result := term()
-	//fmt.Println("current token", currentToken.tokenType)
-	for currentToken.tokenType == PLUS ||
-		currentToken.tokenType == MINUS ||
-		currentToken.tokenType == MULTIPLY ||
-		currentToken.tokenType == DIVIDE {
-		token := currentToken
-		switch token.tokenType {
-		case PLUS:
-			eat(PLUS)
-			result += term()
-		case MINUS:
-			eat(MINUS)
-			result -= term()
-		case MULTIPLY:
-			eat(MULTIPLY)
-			result *= term()
-		case DIVIDE:
-			eat(DIVIDE)
-			result /= term()
-		default:
-			panic("bad operator")
-		}
-		//fmt.Println("token :", currentToken.tokenType)
-	}
-	return result, nil
-}
-
 func main() {
 	var err error
 	reader := bufio.NewReader(os.Stdin)
@@ -169,6 +163,7 @@ func main() {
 		eof = false
 		pos = 0
 		currentCharacter = rune(text[0])
+		currentToken = getNextToken()
 		if err != nil {
 			panic(err)
 		}
