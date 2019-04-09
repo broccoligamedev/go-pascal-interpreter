@@ -51,6 +51,23 @@ func skipWhitespace() {
 	}
 }
 
+func term() int {
+	result := factor()
+	for currentToken.tokenType == DIVIDE ||
+		currentToken.tokenType == MULTIPLY {
+		token := currentToken
+		switch token.tokenType {
+		case DIVIDE:
+			eat(DIVIDE)
+			result /= factor()
+		case MULTIPLY:
+			eat(MULTIPLY)
+			result *= factor()
+		}
+	}
+	return result
+}
+
 func factor() int {
 	token := currentToken
 	eat(INTEGER)
@@ -72,25 +89,17 @@ func integer() int {
 
 func expr() (int, error) {
 	// todo(ryan): proper error handling
-	result := factor()
+	result := term()
 	for currentToken.tokenType == PLUS ||
-		currentToken.tokenType == MINUS ||
-		currentToken.tokenType == MULTIPLY ||
-		currentToken.tokenType == DIVIDE {
+		currentToken.tokenType == MINUS {
 		token := currentToken
 		switch token.tokenType {
 		case PLUS:
 			eat(PLUS)
-			result += factor()
+			result += term()
 		case MINUS:
 			eat(MINUS)
-			result -= factor()
-		case MULTIPLY:
-			eat(MULTIPLY)
-			result *= factor()
-		case DIVIDE:
-			eat(DIVIDE)
-			result /= factor()
+			result -= term()
 		}
 	}
 	return result, nil
