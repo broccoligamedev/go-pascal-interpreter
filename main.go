@@ -36,11 +36,27 @@ type Token struct {
 	value     int
 }
 
+// note(ryan): this is used for debugging purposes because sometimes we want
+// print out the actual token and not just the enum value. see: populateTokenMap()
+var tokenMap map[TokenType]string
+
 var text string
 var pos int
 var currentToken *Token
 var currentCharacter rune
 var eof = false
+
+func populateTokenMap() {
+	tokenMap = make(map[TokenType]string)
+	tokenMap[INTEGER] = "INT"
+	tokenMap[PLUS] = "+"
+	tokenMap[MINUS] = "-"
+	tokenMap[MULTIPLY] = "*"
+	tokenMap[DIVIDE] = "/"
+	tokenMap[EOF] = "EOF"
+	tokenMap[LPAREN] = "("
+	tokenMap[RPAREN] = ")"
+}
 
 func (t *Token) String() string {
 	return strconv.Itoa(t.value)
@@ -62,7 +78,6 @@ func skipWhitespace() {
 }
 
 func expr() (int, error) {
-	// todo(ryan): proper error handling
 	var err error
 	result, err := term()
 	if err != nil {
@@ -135,6 +150,9 @@ func term() (int, error) {
 func factor() (int, error) {
 	var err error
 	result := 0
+	// note(ryan): if we find an LPAREN here then we eat it and recursively call expr.
+	// this lets us handle nested expressions with parenthesis. see the grammar for more
+	// info.
 	if currentToken.tokenType == LPAREN {
 		err = eat(LPAREN)
 		if err != nil {
@@ -182,9 +200,9 @@ func eat(tokenType TokenType) error {
 	} else {
 		return errors.New(
 			"wrong token type. expected " +
-				strconv.Itoa(int(tokenType)) +
+				tokenMap[tokenType] +
 				" but got " +
-				strconv.Itoa(int(currentToken.tokenType)))
+				tokenMap[currentToken.tokenType])
 	}
 	return nil
 }
@@ -249,6 +267,7 @@ func getNextToken() (*Token, error) {
 func main() {
 	var err error
 	reader := bufio.NewReader(os.Stdin)
+	populateTokenMap()
 	for {
 		fmt.Print("calc> ")
 		text, err = reader.ReadString('\n')
@@ -260,13 +279,20 @@ func main() {
 		}
 		currentCharacter = rune(text[0])
 		currentToken, err = getNextToken()
+		// note(ryan): the first token could be bad
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("error: " + err.Error())
 			continue
 		}
+		// note(ryan): otherwise we continue as normal
 		result, err := expr()
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("error: " + err.Error())
+			continue
+		}
+		err = eat(EOF)
+		if err != nil {
+			fmt.Println("error: " + err.Error())
 			continue
 		}
 		fmt.Println(result)
