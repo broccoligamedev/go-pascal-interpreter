@@ -13,9 +13,9 @@ import (
 // GRAMMAR
 
 /*
-EXPR		TERM [[ADD | SUB] TERM]+
-TERM		FACTOR [[MUL | DIV] FACTOR]+
-FACTOR		INT | (EXPR)
+EXPR		TERM ((ADD | SUB) TERM)+
+TERM		FACTOR ((MUL | DIV) FACTOR)+
+FACTOR		INT | (LPAREN EXPR RPAREN)
 */
 
 type TokenType int
@@ -63,53 +63,102 @@ func skipWhitespace() {
 
 func expr() (int, error) {
 	// todo(ryan): proper error handling
-	result := term()
+	var err error
+	result, err := term()
+	if err != nil {
+		return 0, err
+	}
 	for currentToken.tokenType == PLUS ||
 		currentToken.tokenType == MINUS {
 		token := currentToken
 		switch token.tokenType {
 		case PLUS:
-			eat(PLUS)
-			result += term()
+			err = eat(PLUS)
+			if err != nil {
+				return 0, err
+			}
+			value, err := term()
+			if err != nil {
+				return 0, err
+			}
+			result += value
 		case MINUS:
-			eat(MINUS)
-			result -= term()
+			err = eat(MINUS)
+			if err != nil {
+				return 0, err
+			}
+			value, err := term()
+			if err != nil {
+				return 0, err
+			}
+			result -= value
 		}
 	}
 	return result, nil
 }
 
-func term() int {
-	result := factor()
+func term() (int, error) {
+	var err error
+	result, err := factor()
+	if err != nil {
+		return 0, err
+	}
 	for currentToken.tokenType == DIVIDE ||
 		currentToken.tokenType == MULTIPLY {
 		token := currentToken
 		switch token.tokenType {
 		case DIVIDE:
-			eat(DIVIDE)
-			result /= factor()
+			err = eat(DIVIDE)
+			if err != nil {
+				return 0, err
+			}
+			value, err := factor()
+			if err != nil {
+				return 0, err
+			}
+			result /= value
 		case MULTIPLY:
-			eat(MULTIPLY)
-			result *= factor()
+			err = eat(MULTIPLY)
+			if err != nil {
+				return 0, err
+			}
+			value, err := factor()
+			if err != nil {
+				return 0, err
+			}
+			result *= value
 		}
 	}
-	return result
+	return result, nil
 }
 
-func factor() int {
+func factor() (int, error) {
+	var err error
 	result := 0
 	if currentToken.tokenType == LPAREN {
-		eat(LPAREN)
-		result, _ = expr()
-		eat(RPAREN)
+		err = eat(LPAREN)
+		if err != nil {
+			return 0, err
+		}
+		result, err = expr()
+		if err != nil {
+			return 0, err
+		}
+		err = eat(RPAREN)
+		if err != nil {
+			return 0, err
+		}
 	} else {
 		result = currentToken.value
-		eat(INTEGER)
+		err = eat(INTEGER)
+		if err != nil {
+			return 0, err
+		}
 	}
-	return result
+	return result, nil
 }
 
-func integer() int {
+func integer() (int, error) {
 	digits := []rune{}
 	for !eof && unicode.IsDigit(currentCharacter) {
 		digits = append(digits, currentCharacter)
@@ -117,76 +166,84 @@ func integer() int {
 	}
 	value, err := strconv.Atoi(string(digits))
 	if err != nil {
-		panic(err)
+		return 0, err
 	}
-	return value
+	return value, nil
 }
 
-func eat(tokenType TokenType) {
+func eat(tokenType TokenType) error {
+	var err error
 	//fmt.Println("eating " + strconv.Itoa(int(tokenType)))
 	if currentToken.tokenType == tokenType {
-		currentToken = getNextToken()
+		currentToken, err = getNextToken()
+		if err != nil {
+			return err
+		}
 	} else {
-		fmt.Println(
-			"expected " +
+		return errors.New(
+			"wrong token type. expected " +
 				strconv.Itoa(int(tokenType)) +
 				" but got " +
 				strconv.Itoa(int(currentToken.tokenType)))
-		fmt.Println("pos", pos)
-		fmt.Println("char", string(currentCharacter))
-		panic(errors.New("wrong token type"))
 	}
+	return nil
 }
 
-func getNextToken() *Token {
+func getNextToken() (*Token, error) {
+	var err error
 	for !eof {
 		if unicode.IsSpace(currentCharacter) {
 			skipWhitespace()
 			continue
 		}
 		if unicode.IsDigit(currentCharacter) {
+			var value int
+			value, err = integer()
+			if err != nil {
+				return nil, err
+			}
 			return &Token{
 				tokenType: INTEGER,
-				value:     integer(),
-			}
+				value:     value,
+			}, nil
 		}
 		switch currentCharacter {
 		case '+':
 			advance()
 			return &Token{
 				tokenType: PLUS,
-			}
+			}, nil
 		case '-':
 			advance()
 			return &Token{
 				tokenType: MINUS,
-			}
+			}, nil
 		case '*':
 			advance()
 			return &Token{
 				tokenType: MULTIPLY,
-			}
+			}, nil
 		case '/':
 			advance()
 			return &Token{
 				tokenType: DIVIDE,
-			}
+			}, nil
 		case '(':
 			advance()
 			return &Token{
 				tokenType: LPAREN,
-			}
+			}, nil
 		case ')':
 			advance()
 			return &Token{
 				tokenType: RPAREN,
-			}
+			}, nil
 		}
-		panic(errors.New("invalid token: " + string(currentCharacter)))
+		return nil, errors.New("invalid token: " + string(currentCharacter))
 	}
 	return &Token{
 		tokenType: EOF,
-	}
+	}, nil
 }
 
 func main() {
@@ -198,12 +255,13 @@ func main() {
 		text = strings.TrimSpace(text)
 		eof = false
 		pos = 0
-		currentCharacter = rune(text[0])
-		currentToken = getNextToken()
-		if err != nil {
-			panic(err)
-		}
 		if len(text) == 0 {
+			continue
+		}
+		currentCharacter = rune(text[0])
+		currentToken, err = getNextToken()
+		if err != nil {
+			fmt.Println(err)
 			continue
 		}
 		result, err := expr()
