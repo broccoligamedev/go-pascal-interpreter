@@ -10,6 +10,14 @@ import (
 	"unicode"
 )
 
+// GRAMMAR
+
+/*
+EXPR		TERM [[ADD | SUB] TERM]+
+TERM		FACTOR [[MUL | DIV] FACTOR]+
+FACTOR		INT | (EXPR)
+*/
+
 type TokenType int
 
 const (
@@ -19,6 +27,8 @@ const (
 	MULTIPLY
 	DIVIDE
 	EOF
+	LPAREN
+	RPAREN
 )
 
 type Token struct {
@@ -51,6 +61,24 @@ func skipWhitespace() {
 	}
 }
 
+func expr() (int, error) {
+	// todo(ryan): proper error handling
+	result := term()
+	for currentToken.tokenType == PLUS ||
+		currentToken.tokenType == MINUS {
+		token := currentToken
+		switch token.tokenType {
+		case PLUS:
+			eat(PLUS)
+			result += term()
+		case MINUS:
+			eat(MINUS)
+			result -= term()
+		}
+	}
+	return result, nil
+}
+
 func term() int {
 	result := factor()
 	for currentToken.tokenType == DIVIDE ||
@@ -69,9 +97,16 @@ func term() int {
 }
 
 func factor() int {
-	token := currentToken
-	eat(INTEGER)
-	return token.value
+	result := 0
+	if currentToken.tokenType == LPAREN {
+		eat(LPAREN)
+		result, _ = expr()
+		eat(RPAREN)
+	} else {
+		result = currentToken.value
+		eat(INTEGER)
+	}
+	return result
 }
 
 func integer() int {
@@ -85,24 +120,6 @@ func integer() int {
 		panic(err)
 	}
 	return value
-}
-
-func expr() (int, error) {
-	// todo(ryan): proper error handling
-	result := term()
-	for currentToken.tokenType == PLUS ||
-		currentToken.tokenType == MINUS {
-		token := currentToken
-		switch token.tokenType {
-		case PLUS:
-			eat(PLUS)
-			result += term()
-		case MINUS:
-			eat(MINUS)
-			result -= term()
-		}
-	}
-	return result, nil
 }
 
 func eat(tokenType TokenType) {
@@ -153,6 +170,16 @@ func getNextToken() *Token {
 			advance()
 			return &Token{
 				tokenType: DIVIDE,
+			}
+		case '(':
+			advance()
+			return &Token{
+				tokenType: LPAREN,
+			}
+		case ')':
+			advance()
+			return &Token{
+				tokenType: RPAREN,
 			}
 		}
 		panic(errors.New("invalid token: " + string(currentCharacter)))
