@@ -18,6 +18,10 @@ TERM		FACTOR ((MUL | DIV) FACTOR)+
 FACTOR		INT | (LPAREN EXPR RPAREN)
 */
 
+// note(ryan): There's no good way to implement tagged unions in Go so we're left with
+// either fat structs or dummy interfaces or empty interfaces. I chose fat structs because I think it's a bit
+// cleaner.
+
 type TokenType int
 
 const (
@@ -34,6 +38,20 @@ const (
 type Token struct {
 	tokenType TokenType
 	value     int
+}
+
+type ASTNodeType int
+
+const (
+	BIN_OP ASTNodeType = iota
+	NUM
+)
+
+type ASTNode struct {
+	nodeType ASTNodeType
+	left     *ASTNode
+	right    *ASTNode
+	token    *Token
 }
 
 // note(ryan): this is used for debugging purposes because sometimes we want
@@ -77,11 +95,11 @@ func skipWhitespace() {
 	}
 }
 
-func expr() (int, error) {
+func expr() (*ASTNode, error) {
 	var err error
-	result, err := term()
+	node, err := term()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	for currentToken.tokenType == PLUS ||
 		currentToken.tokenType == MINUS {
@@ -90,33 +108,33 @@ func expr() (int, error) {
 		case PLUS:
 			err = eat(PLUS)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
-			value, err := term()
-			if err != nil {
-				return 0, err
-			}
-			result += value
 		case MINUS:
 			err = eat(MINUS)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
-			value, err := term()
-			if err != nil {
-				return 0, err
-			}
-			result -= value
+		}
+		right, err := term()
+		if err != nil {
+			return nil, err
+		}
+		node = &ASTNode{
+			nodeType: BIN_OP,
+			left:     node,
+			token:    token,
+			right:    right,
 		}
 	}
-	return result, nil
+	return node, nil
 }
 
-func term() (int, error) {
+func term() (*ASTNode, error) {
 	var err error
-	result, err := factor()
+	node, err := factor()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	for currentToken.tokenType == DIVIDE ||
 		currentToken.tokenType == MULTIPLY {
@@ -125,55 +143,53 @@ func term() (int, error) {
 		case DIVIDE:
 			err = eat(DIVIDE)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
-			value, err := factor()
-			if err != nil {
-				return 0, err
-			}
-			result /= value
 		case MULTIPLY:
 			err = eat(MULTIPLY)
 			if err != nil {
-				return 0, err
+				return nil, err
 			}
-			value, err := factor()
-			if err != nil {
-				return 0, err
-			}
-			result *= value
+		}
+		right, err := factor()
+		if err != nil {
+			return nil, err
+		}
+		node = &ASTNode{
+			left:     node,
+			right:    right,
+			nodeType: BIN_OP,
+			token:    token,
 		}
 	}
-	return result, nil
+	return node, nil
 }
 
-func factor() (int, error) {
+func factor() (*ASTNode, error) {
 	var err error
-	result := 0
 	// note(ryan): if we find an LPAREN here then we eat it and recursively call expr.
 	// this lets us handle nested expressions with parenthesis. see the grammar for more
 	// info.
-	if currentToken.tokenType == LPAREN {
+	token := currentToken
+	if token.tokenType == INTEGER {
+		eat(INTEGER)
+		return &ASTNode{
+			nodeType: NUM,
+			token:    token,
+		}, nil
+	} else if token.tokenType == LPAREN {
 		err = eat(LPAREN)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
-		result, err = expr()
-		if err != nil {
-			return 0, err
-		}
+		node, err := expr()
 		err = eat(RPAREN)
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
-	} else {
-		result = currentToken.value
-		err = eat(INTEGER)
-		if err != nil {
-			return 0, err
-		}
+		return node, nil
 	}
-	return result, nil
+	return nil, errors.New("bad token type in factor")
 }
 
 func integer() (int, error) {
@@ -182,11 +198,63 @@ func integer() (int, error) {
 		digits = append(digits, currentCharacter)
 		advance()
 	}
+	//fmt.Println("currentCharacter", strconv.QuoteRune(currentCharacter))
+	if !eof {
+		if currentCharacter != '+' &&
+			currentCharacter != '-' &&
+			currentCharacter != '/' &&
+			currentCharacter != '*' {
+			return 0, errors.New("bad syntax")
+		}
+	}
 	value, err := strconv.Atoi(string(digits))
 	if err != nil {
 		return 0, err
 	}
 	return value, nil
+}
+
+func visit(node *ASTNode) (int, error) {
+	// todo(ryan): there might be a better way to do this. revisit it at a
+	// later time to see if a rewrite is warranted.
+	var err error
+	var leftVal int
+	var rightVal int
+	if node.left != nil {
+		leftVal, err = visit(node.left)
+		if err != nil {
+			return 0, err
+		}
+	}
+	if node.right != nil {
+		rightVal, err = visit(node.right)
+		if err != nil {
+			return 0, err
+		}
+	}
+	token := node.token
+	//fmt.Println("token?", token)
+	switch node.nodeType {
+	case BIN_OP:
+		switch token.tokenType {
+		case MULTIPLY:
+			return leftVal * rightVal, nil
+		case DIVIDE:
+			if rightVal == 0 {
+				return 0, errors.New("divide by zero.")
+			}
+			return leftVal / rightVal, nil
+		case PLUS:
+			return leftVal + rightVal, nil
+		case MINUS:
+			return leftVal - rightVal, nil
+		}
+	case NUM:
+		return token.value, nil
+	}
+	// note(ryan): really we should never reach this because the errors will be
+	// caught during parsing
+	return 0, errors.New("invalid node type")
 }
 
 func eat(tokenType TokenType) error {
@@ -285,12 +353,17 @@ func main() {
 			continue
 		}
 		// note(ryan): otherwise we continue as normal
-		result, err := expr()
+		AST, err := expr()
 		if err != nil {
 			fmt.Println("error: " + err.Error())
 			continue
 		}
 		err = eat(EOF)
+		if err != nil {
+			fmt.Println("error: " + err.Error())
+			continue
+		}
+		result, err := visit(AST)
 		if err != nil {
 			fmt.Println("error: " + err.Error())
 			continue
