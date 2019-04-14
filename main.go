@@ -203,7 +203,9 @@ func integer() (int, error) {
 		if currentCharacter != '+' &&
 			currentCharacter != '-' &&
 			currentCharacter != '/' &&
-			currentCharacter != '*' {
+			currentCharacter != '*' &&
+			currentCharacter != ')' &&
+			!unicode.IsSpace(currentCharacter) {
 			return 0, errors.New("bad syntax")
 		}
 	}
@@ -257,9 +259,42 @@ func visit(node *ASTNode) (int, error) {
 	return 0, errors.New("invalid node type")
 }
 
+/* func toLISPString(node *ASTNode) (string, error) {
+
+} */
+
+func toPolishString(node *ASTNode) (string, error) {
+	var err error
+	var leftVal string
+	var rightVal string
+	if node.left != nil {
+		leftVal, err = toPolishString(node.left)
+		if err != nil {
+			return "", err
+		}
+	}
+	if node.right != nil {
+		rightVal, err = toPolishString(node.right)
+		if err != nil {
+			return "", err
+		}
+	}
+	token := node.token
+	//fmt.Println("token?", token)
+	switch node.nodeType {
+	case BIN_OP:
+		return leftVal + " " + rightVal + " " + tokenMap[token.tokenType], nil
+	case NUM:
+		return strconv.Itoa(token.value), nil
+	}
+	// note(ryan): really we should never reach this because the errors will be
+	// caught during parsing
+	return "", errors.New("invalid node type")
+}
+
 func eat(tokenType TokenType) error {
 	var err error
-	//fmt.Println("eating " + strconv.Itoa(int(tokenType)))
+	fmt.Println("eating " + tokenMap[tokenType])
 	if currentToken.tokenType == tokenType {
 		currentToken, err = getNextToken()
 		if err != nil {
