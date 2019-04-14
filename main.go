@@ -216,85 +216,82 @@ func integer() (int, error) {
 	return value, nil
 }
 
-func visit(node *ASTNode) (int, error) {
-	// todo(ryan): there might be a better way to do this. revisit it at a
-	// later time to see if a rewrite is warranted.
+func visit(node *ASTNode, visitor func(*ASTNode, interface{}, interface{}) (interface{}, error)) (interface{}, error) {
+	// todo(ryan): we might want to encapsulate the visitor function in some kind of visitor struct
+	// if we ever want to do something between visits, this could be relevant...
 	var err error
-	var leftVal int
-	var rightVal int
+	var leftVal interface{}
+	var rightVal interface{}
 	if node.left != nil {
-		leftVal, err = visit(node.left)
+		leftVal, err = visit(node.left, visitor)
 		if err != nil {
 			return 0, err
 		}
 	}
 	if node.right != nil {
-		rightVal, err = visit(node.right)
+		rightVal, err = visit(node.right, visitor)
 		if err != nil {
 			return 0, err
 		}
 	}
+	result, err := visitor(node, leftVal, rightVal)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func evalVisitor(node *ASTNode, leftVal interface{}, rightVal interface{}) (interface{}, error) {
 	token := node.token
-	//fmt.Println("token?", token)
+	var result int
 	switch node.nodeType {
 	case BIN_OP:
 		switch token.tokenType {
-		case MULTIPLY:
-			return leftVal * rightVal, nil
-		case DIVIDE:
-			if rightVal == 0 {
-				return 0, errors.New("divide by zero.")
-			}
-			return leftVal / rightVal, nil
 		case PLUS:
-			return leftVal + rightVal, nil
+			result = leftVal.(int) + rightVal.(int)
 		case MINUS:
-			return leftVal - rightVal, nil
+			result = leftVal.(int) - rightVal.(int)
+		case MULTIPLY:
+			result = leftVal.(int) * rightVal.(int)
+		case DIVIDE:
+			if rightVal.(int) == 0 {
+				return nil, errors.New("can't divide by zero")
+			}
+			result = leftVal.(int) / rightVal.(int)
 		}
 	case NUM:
 		return token.value, nil
 	}
-	// note(ryan): really we should never reach this because the errors will be
-	// caught during parsing
-	return 0, errors.New("invalid node type")
+	return result, nil
 }
 
-/* func toLISPString(node *ASTNode) (string, error) {
-
-} */
-
-func toPolishString(node *ASTNode) (string, error) {
-	var err error
-	var leftVal string
-	var rightVal string
-	if node.left != nil {
-		leftVal, err = toPolishString(node.left)
-		if err != nil {
-			return "", err
-		}
-	}
-	if node.right != nil {
-		rightVal, err = toPolishString(node.right)
-		if err != nil {
-			return "", err
-		}
-	}
+func lispVisitor(node *ASTNode, leftVal interface{}, rightVal interface{}) (interface{}, error) {
 	token := node.token
-	//fmt.Println("token?", token)
+	var result string
 	switch node.nodeType {
 	case BIN_OP:
-		return leftVal + " " + rightVal + " " + tokenMap[token.tokenType], nil
+		result = "(" + tokenMap[token.tokenType] + " " + leftVal.(string) + " " + rightVal.(string) + ")"
 	case NUM:
-		return strconv.Itoa(token.value), nil
+		result = strconv.Itoa(token.value)
 	}
-	// note(ryan): really we should never reach this because the errors will be
-	// caught during parsing
-	return "", errors.New("invalid node type")
+	return result, nil
+}
+
+func polishVisistor(node *ASTNode, leftVal interface{}, rightVal interface{}) (interface{}, error) {
+	token := node.token
+	var result string
+	switch node.nodeType {
+	case BIN_OP:
+		result = leftVal.(string) + " " + rightVal.(string) + " " + tokenMap[token.tokenType]
+	case NUM:
+		result = strconv.Itoa(token.value)
+	}
+	return result, nil
 }
 
 func eat(tokenType TokenType) error {
 	var err error
-	fmt.Println("eating " + tokenMap[tokenType])
+	//fmt.Println("eating " + tokenMap[tokenType])
 	if currentToken.tokenType == tokenType {
 		currentToken, err = getNextToken()
 		if err != nil {
@@ -398,7 +395,7 @@ func main() {
 			fmt.Println("error: " + err.Error())
 			continue
 		}
-		result, err := visit(AST)
+		result, err := visit(AST, evalVisitor)
 		if err != nil {
 			fmt.Println("error: " + err.Error())
 			continue
